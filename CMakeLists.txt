@@ -3,7 +3,7 @@ project(GLCars2)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(GLCars2 src/main.cpp src/shader.hpp)
+add_executable(GLCars2 src/main.cpp src/shader.hpp src/window.hpp)
 
 find_package(GLEW REQUIRED)
 find_package(GLM REQUIRED)
