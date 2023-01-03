@@ -7,14 +7,36 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
 
+#include <vector>
+
+//
+//class Model {
+//public:
+//    Model(const char* path) {
+//
+//    }
+//private:
+//    std::vector<>
+//
+//    void processNode(aiNode* node, aiScene* scene) {
+//
+//    }
+//    void processMesh(aiMesh* mesh, aiScene* scene) {
+//
+//    }
+//};
 
 GLFWwindow* Window;
 int ScreenWidth = 640, ScreenHeight = 480;
-GLuint ProgramId, VaoId, VboId, ColorBufferId;
+GLuint ProgramId, VaoId, VboId, EboId;
 GLint ModelLoc, ViewLoc, ProjectionLoc;
 
 void Initialize();
@@ -23,9 +45,9 @@ void Cleanup();
 GLuint LoadShaders(const char* vertPath, const char* fragPath);
 void CheckCompileErrors(GLuint shader, const std::string& type);
 
-GLuint LoadShaders(const char* vertexSource, const char* fragSource);
-
 int main() {
+//    Model("res/models/cube/cube.obj");
+
     if (!glfwInit()) {
         exit(EXIT_FAILURE);
     }
@@ -67,21 +89,49 @@ int main() {
 }
 
 void Initialize() {
-    GLfloat vertices[] = {
-        -0.5, -0.5, 0.0, 1.0,
-        0.0,  0.5, 0.0, 1.0,
-        0.5, -0.5, 0.0, 1.0,
-    };
+    const char* path = "res/models/cube/cube.obj";
+    Assimp::Importer importer;
+    const aiScene *scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
+    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
+        std::cerr << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
+        exit(1);
+    }
+    std::cout << "has meshes: " << scene->mRootNode->mNumChildren << std::endl;
+    unsigned meshIndex = scene->mRootNode->mChildren[0]->mMeshes[0];
+    aiMesh* mesh = scene->mMeshes[meshIndex];
+
+    std::vector<GLfloat> vertices;
+    for (int i = 0; i < mesh->mNumVertices; i++) {
+        vertices.push_back(mesh->mVertices[i].x);
+        vertices.push_back(mesh->mVertices[i].y);
+        vertices.push_back(mesh->mVertices[i].z);
+    }
+    std::vector<GLuint> indices;
+    for (int i = 0; i < mesh->mNumFaces; i++) {
+        aiFace face = mesh->mFaces[i];
+        for (int j = 0; j < face.mNumIndices; j++) {
+            indices.push_back(face.mIndices[j]);
+        }
+    }
+//    GLfloat vertices[] = {
+//        -0.5, -0.5, 0.0, 1.0,
+//        0.0,  0.5, 0.0, 1.0,
+//        0.5, -0.5, 0.0, 1.0,
+//    };
 
     glGenVertexArrays(1, &VaoId);
     glBindVertexArray(VaoId);
 
     glGenBuffers(1, &VboId);
     glBindBuffer(GL_ARRAY_BUFFER, VboId);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * vertices.size(), &vertices[0], GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+
+    glGenBuffers(1, &EboId);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EboId);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * indices.size(), &indices[0], GL_STATIC_DRAW);
 
     ProgramId = LoadShaders("res/shaders/basic.vert", "res/shaders/basic.frag");
     ModelLoc = glGetUniformLocation(ProgramId, "model");
@@ -95,7 +145,7 @@ void Render() {
 
     glUseProgram(ProgramId);
 
-    glm::vec3 observator(1.0f, 1.0f, 2.0f);
+    glm::vec3 observator(2.0f, 1.5f, 5.0f);
     glm::vec3 reference(0.0f, 0.0f, -10.0f);
     glm::vec3 up(0.0f, 1.0f, 0.0f);
     glm::mat4 view = glm::lookAt(observator, reference, up);
@@ -108,7 +158,8 @@ void Render() {
     glUniformMatrix4fv(ProjectionLoc, 1, GL_FALSE, &projection[0][0]);
 
     glBindVertexArray(VaoId);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+//    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr);
 
     glFlush();
 }
@@ -120,7 +171,6 @@ void Cleanup() {
     glDisableVertexAttribArray(0);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glDeleteBuffers(1, &ColorBufferId);
     glDeleteBuffers(1, &VboId);
 
     glBindVertexArray(0);
@@ -133,7 +183,7 @@ GLuint LoadShaders(const char *vertPath, const char *fragPath) {
     std::string fragmentCode;
     std::ifstream vShaderFile;
     std::ifstream fShaderFile;
-    // ensure ifstream objects can throw exceptions:
+    // ensure ifstream models can throw exceptions:
     vShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
     fShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
     try {
