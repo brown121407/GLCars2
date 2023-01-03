@@ -15,7 +15,7 @@
 GLFWwindow* Window;
 int ScreenWidth = 640, ScreenHeight = 480;
 GLuint ProgramId, VaoId, VboId, ColorBufferId;
-GLint ViewLoc, ProjectionLoc;
+GLint ModelLoc, ViewLoc, ProjectionLoc;
 
 void Initialize();
 void Render();
@@ -84,12 +84,13 @@ void Initialize() {
     glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, nullptr);
 
     ProgramId = LoadShaders("res/shaders/basic.vert", "res/shaders/basic.frag");
+    ModelLoc = glGetUniformLocation(ProgramId, "model");
     ViewLoc = glGetUniformLocation(ProgramId, "view");
     ProjectionLoc = glGetUniformLocation(ProgramId, "projection");
 }
 
 void Render() {
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glUseProgram(ProgramId);
@@ -98,9 +99,11 @@ void Render() {
     glm::vec3 reference(0.0f, 0.0f, -10.0f);
     glm::vec3 up(0.0f, 1.0f, 0.0f);
     glm::mat4 view = glm::lookAt(observator, reference, up);
-    GLfloat fovAngle = glm::pi<GLfloat>() / 2.4f; // 75 degrees
-    glm::mat4 projection = glm::perspective(fovAngle, (GLfloat) ScreenWidth / (GLfloat) ScreenHeight, 0.1f, 100.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(75.0f), (GLfloat) ScreenWidth / (GLfloat) ScreenHeight, 0.1f, 100.0f);
 
+    auto model = glm::identity<glm::mat4>();
+
+    glUniformMatrix4fv(ModelLoc, 1, GL_FALSE, &model[0][0]);
     glUniformMatrix4fv(ViewLoc, 1, GL_FALSE, &view[0][0]);
     glUniformMatrix4fv(ProjectionLoc, 1, GL_FALSE, &projection[0][0]);
 

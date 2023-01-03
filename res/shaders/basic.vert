@@ -2,8 +2,8 @@
 
 layout (location = 0) in vec4 aPos;
 
-uniform mat4 view, projection;
+uniform mat4 model, view, projection;
 
 void main() {
-    gl_Position = projection * view * aPos;
+    gl_Position = projection * view * model * aPos;
 }
