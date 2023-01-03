@@ -1,11 +1,9 @@
 #version 330 core
 
-layout (location = 0) in vec4 in_Position;
-layout (location = 1) in vec4 in_Color;
+layout (location = 0) in vec4 aPos;
 
-out vec4 ex_Color;
+uniform mat4 view, projection;
 
 void main() {
-    gl_Position = in_Position;
-    ex_Color = in_Color;
+    gl_Position = projection * view * aPos;
 }

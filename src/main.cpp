@@ -13,7 +13,9 @@
 
 
 GLFWwindow* Window;
+int ScreenWidth = 640, ScreenHeight = 480;
 GLuint ProgramId, VaoId, VboId, ColorBufferId;
+GLint ViewLoc, ProjectionLoc;
 
 void Initialize();
 void Render();
@@ -33,7 +35,7 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // To make macOS happy; should not be needed
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    Window = glfwCreateWindow(640, 480, "macOS OpenGL", nullptr, nullptr);
+    Window = glfwCreateWindow(ScreenWidth, ScreenHeight, "macOS OpenGL", nullptr, nullptr);
     if (!Window) {
         glfwTerminate();
         exit(EXIT_FAILURE);
@@ -45,13 +47,11 @@ int main() {
 
     Initialize();
 
-    while (!glfwWindowShouldClose(Window)) {
-        int width, height;
-        glfwGetFramebufferSize(Window, &width, &height);
+    glEnable(GL_DEPTH_TEST);
 
-        glViewport(0, 0, width, height);
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+    while (!glfwWindowShouldClose(Window)) {
+        glfwGetFramebufferSize(Window, &ScreenWidth, &ScreenHeight);
+        glViewport(0, 0, ScreenWidth, ScreenHeight);
 
         Render();
 
@@ -73,12 +73,6 @@ void Initialize() {
         0.5, -0.5, 0.0, 1.0,
     };
 
-    GLfloat colors[] = {
-        1.0, 0.0, 0.0, 1.0,
-        0.0, 1.0, 0.0, 1.0,
-        0.0, 0.0, 1.0, 1.0,
-    };
-
     glGenVertexArrays(1, &VaoId);
     glBindVertexArray(VaoId);
 
@@ -89,18 +83,28 @@ void Initialize() {
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, nullptr);
 
-    glGenBuffers(1, &ColorBufferId);
-    glBindBuffer(GL_ARRAY_BUFFER, ColorBufferId);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(colors), colors, GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, nullptr);
-
     ProgramId = LoadShaders("res/shaders/basic.vert", "res/shaders/basic.frag");
+    ViewLoc = glGetUniformLocation(ProgramId, "view");
+    ProjectionLoc = glGetUniformLocation(ProgramId, "projection");
 }
 
 void Render() {
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
     glUseProgram(ProgramId);
+
+    glm::vec3 observator(1.0f, 1.0f, 2.0f);
+    glm::vec3 reference(0.0f, 0.0f, -10.0f);
+    glm::vec3 up(0.0f, 1.0f, 0.0f);
+    glm::mat4 view = glm::lookAt(observator, reference, up);
+    GLfloat fovAngle = glm::pi<GLfloat>() / 2.4f; // 75 degrees
+    glm::mat4 projection = glm::perspective(fovAngle, (GLfloat) ScreenWidth / (GLfloat) ScreenHeight, 0.1f, 100.0f);
+
+    glUniformMatrix4fv(ViewLoc, 1, GL_FALSE, &view[0][0]);
+    glUniformMatrix4fv(ProjectionLoc, 1, GL_FALSE, &projection[0][0]);
+
+    glBindVertexArray(VaoId);
     glDrawArrays(GL_TRIANGLES, 0, 3);
 
     glFlush();
