@@ -118,7 +118,7 @@ private:
 GLFWwindow* Window;
 int ScreenWidth = 640, ScreenHeight = 480;
 GLuint ProgramId;
-GLint ModelLoc, ViewLoc, ProjectionLoc;
+GLint ModelLoc, ViewLoc, ProjectionLoc, ColorCodeLoc;
 
 void Initialize();
 void Render();
@@ -126,7 +126,7 @@ void Cleanup();
 GLuint LoadShaders(const char* vertPath, const char* fragPath);
 void CheckCompileErrors(GLuint shader, const std::string& type);
 
-std::unique_ptr<Model> Cube;
+std::unique_ptr<Model> Cylinder, Plane;
 
 int main() {
     if (!glfwInit()) {
@@ -170,12 +170,14 @@ int main() {
 }
 
 void Initialize() {
-    Cube = std::make_unique<Model>("res/models/cube/cube.obj");
+    Cylinder = std::make_unique<Model>("res/models/wheel/wheel.obj");
+    Plane = std::make_unique<Model>("res/models/road/road.obj");
 
     ProgramId = LoadShaders("res/shaders/basic.vert", "res/shaders/basic.frag");
     ModelLoc = glGetUniformLocation(ProgramId, "model");
     ViewLoc = glGetUniformLocation(ProgramId, "view");
     ProjectionLoc = glGetUniformLocation(ProgramId, "projection");
+    ColorCodeLoc = glGetUniformLocation(ProgramId, "colorCode");
 }
 
 void Render() {
@@ -184,19 +186,39 @@ void Render() {
 
     glUseProgram(ProgramId);
 
-    glm::vec3 eye(2.0f, 1.5f, 5.0f);
-    glm::vec3 reference(0.0f, 0.0f, -10.0f);
+    glm::vec3 reference(0.0f, 0.0f, 0.0f);
     glm::vec3 up(0.0f, 1.0f, 0.0f);
-    glm::mat4 view = glm::lookAt(eye, reference, up);
+    float radius = 15.0f;
+    float camX = glm::sin(glfwGetTime() / 2) * radius;
+    float camZ = glm::cos(glfwGetTime() / 2) * radius;
+    glm::mat4 view = glm::lookAt(glm::vec3(camX, 5.0f, camZ), reference, up);
+
     glm::mat4 projection = glm::perspective(glm::radians(75.0f), (GLfloat) ScreenWidth / (GLfloat) ScreenHeight, 0.1f, 100.0f);
 
-    auto model = glm::identity<glm::mat4>();
-
-    glUniformMatrix4fv(ModelLoc, 1, GL_FALSE, &model[0][0]);
     glUniformMatrix4fv(ViewLoc, 1, GL_FALSE, &view[0][0]);
     glUniformMatrix4fv(ProjectionLoc, 1, GL_FALSE, &projection[0][0]);
 
-    Cube->Render();
+    glUniform1i(ColorCodeLoc, 1);
+    auto model = glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 1.0f, 5.0f));
+    glUniformMatrix4fv(ModelLoc, 1, GL_FALSE, &model[0][0]);
+    Cylinder->Render();
+
+    model = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 1.0f, 5.0f));
+    glUniformMatrix4fv(ModelLoc, 1, GL_FALSE, &model[0][0]);
+    Cylinder->Render();
+
+    model = glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 1.0f, -5.0f));
+    glUniformMatrix4fv(ModelLoc, 1, GL_FALSE, &model[0][0]);
+    Cylinder->Render();
+
+    model = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 1.0f, -5.0f));
+    glUniformMatrix4fv(ModelLoc, 1, GL_FALSE, &model[0][0]);
+    Cylinder->Render();
+
+    glUniform1i(ColorCodeLoc, 2);
+    model = glm::scale(glm::mat4(1.0f), glm::vec3(5.0f, 1.0f, 20.0f));
+    glUniformMatrix4fv(ModelLoc, 1, GL_FALSE, &model[0][0]);
+    Plane->Render();
 
     glFlush();
 }
