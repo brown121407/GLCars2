@@ -15,28 +15,109 @@
 #include <fstream>
 #include <sstream>
 
+#include <utility>
+#include <memory>
 #include <vector>
 
-//
-//class Model {
-//public:
-//    Model(const char* path) {
-//
-//    }
-//private:
-//    std::vector<>
-//
-//    void processNode(aiNode* node, aiScene* scene) {
-//
-//    }
-//    void processMesh(aiMesh* mesh, aiScene* scene) {
-//
-//    }
-//};
+class Mesh {
+public:
+    Mesh(std::vector<GLfloat> vertices, std::vector<GLuint> indices)
+    : _vertices(std::move(vertices)), _indices(std::move(indices)) {
+        glGenVertexArrays(1, &_vaoId);
+        glBindVertexArray(_vaoId);
+
+        glGenBuffers(1, &_vboId);
+        glBindBuffer(GL_ARRAY_BUFFER, _vboId);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * _vertices.size(), &_vertices[0], GL_STATIC_DRAW);
+
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+
+        glGenBuffers(1, &_eboId);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _eboId);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * _indices.size(), &_indices[0], GL_STATIC_DRAW);
+    }
+
+    Mesh(Mesh&& other) noexcept
+    : _vaoId(other._vaoId), _vboId(other._vboId), _eboId(other._eboId), _vertices(std::move(other._vertices)),
+    _indices(std::move(other._indices)) {
+
+    }
+
+    ~Mesh() {
+        glDeleteVertexArrays(1, &_vaoId);
+        glDeleteBuffers(1, &_vboId);
+        glDeleteBuffers(1, &_eboId);
+    }
+
+    void Render() const {
+        glBindVertexArray(_vaoId);
+
+        glDrawElements(GL_TRIANGLES, _indices.size(), GL_UNSIGNED_INT, nullptr);
+
+        glBindVertexArray(0);
+    }
+private:
+    std::vector<GLfloat> _vertices;
+    std::vector<GLuint> _indices;
+    GLuint _vaoId, _vboId, _eboId;
+};
+
+class Model {
+public:
+    explicit Model(const char* path) {
+        Assimp::Importer importer;
+        const aiScene *scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
+        if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
+            std::cerr << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
+            exit(1);
+        }
+
+        processNode(scene->mRootNode, scene);
+    }
+
+    void Render() const {
+        for (const auto& mesh : _meshes) {
+            mesh->Render();
+        }
+    }
+private:
+    std::vector<std::unique_ptr<Mesh>> _meshes;
+
+    void processNode(aiNode* node, const aiScene* scene) {
+        for (size_t i = 0; i < node->mNumMeshes; i++) {
+            aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+            _meshes.push_back(processMesh(mesh));
+        }
+
+        for (size_t i = 0; i < node->mNumChildren; i++) {
+            processNode(node->mChildren[i], scene);
+        }
+    }
+
+    std::unique_ptr<Mesh> processMesh(aiMesh* mesh) {
+        std::vector<GLfloat> vertices;
+        for (int i = 0; i < mesh->mNumVertices; i++) {
+            vertices.push_back(mesh->mVertices[i].x);
+            vertices.push_back(mesh->mVertices[i].y);
+            vertices.push_back(mesh->mVertices[i].z);
+        }
+
+        std::vector<GLuint> indices;
+        for (int i = 0; i < mesh->mNumFaces; i++) {
+            aiFace face = mesh->mFaces[i];
+            for (int j = 0; j < face.mNumIndices; j++) {
+                indices.push_back(face.mIndices[j]);
+            }
+        }
+
+        return std::make_unique<Mesh>(vertices, indices);
+    }
+};
 
 GLFWwindow* Window;
 int ScreenWidth = 640, ScreenHeight = 480;
-GLuint ProgramId, VaoId, VboId, EboId;
+GLuint ProgramId;
 GLint ModelLoc, ViewLoc, ProjectionLoc;
 
 void Initialize();
@@ -45,9 +126,9 @@ void Cleanup();
 GLuint LoadShaders(const char* vertPath, const char* fragPath);
 void CheckCompileErrors(GLuint shader, const std::string& type);
 
-int main() {
-//    Model("res/models/cube/cube.obj");
+std::unique_ptr<Model> Cube;
 
+int main() {
     if (!glfwInit()) {
         exit(EXIT_FAILURE);
     }
@@ -57,7 +138,7 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // To make macOS happy; should not be needed
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    Window = glfwCreateWindow(ScreenWidth, ScreenHeight, "macOS OpenGL", nullptr, nullptr);
+    Window = glfwCreateWindow(ScreenWidth, ScreenHeight, "GLCars2", nullptr, nullptr);
     if (!Window) {
         glfwTerminate();
         exit(EXIT_FAILURE);
@@ -89,49 +170,7 @@ int main() {
 }
 
 void Initialize() {
-    const char* path = "res/models/cube/cube.obj";
-    Assimp::Importer importer;
-    const aiScene *scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
-    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-        std::cerr << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
-        exit(1);
-    }
-    std::cout << "has meshes: " << scene->mRootNode->mNumChildren << std::endl;
-    unsigned meshIndex = scene->mRootNode->mChildren[0]->mMeshes[0];
-    aiMesh* mesh = scene->mMeshes[meshIndex];
-
-    std::vector<GLfloat> vertices;
-    for (int i = 0; i < mesh->mNumVertices; i++) {
-        vertices.push_back(mesh->mVertices[i].x);
-        vertices.push_back(mesh->mVertices[i].y);
-        vertices.push_back(mesh->mVertices[i].z);
-    }
-    std::vector<GLuint> indices;
-    for (int i = 0; i < mesh->mNumFaces; i++) {
-        aiFace face = mesh->mFaces[i];
-        for (int j = 0; j < face.mNumIndices; j++) {
-            indices.push_back(face.mIndices[j]);
-        }
-    }
-//    GLfloat vertices[] = {
-//        -0.5, -0.5, 0.0, 1.0,
-//        0.0,  0.5, 0.0, 1.0,
-//        0.5, -0.5, 0.0, 1.0,
-//    };
-
-    glGenVertexArrays(1, &VaoId);
-    glBindVertexArray(VaoId);
-
-    glGenBuffers(1, &VboId);
-    glBindBuffer(GL_ARRAY_BUFFER, VboId);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * vertices.size(), &vertices[0], GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
-
-    glGenBuffers(1, &EboId);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EboId);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * indices.size(), &indices[0], GL_STATIC_DRAW);
+    Cube = std::make_unique<Model>("res/models/cube/cube.obj");
 
     ProgramId = LoadShaders("res/shaders/basic.vert", "res/shaders/basic.frag");
     ModelLoc = glGetUniformLocation(ProgramId, "model");
@@ -145,10 +184,10 @@ void Render() {
 
     glUseProgram(ProgramId);
 
-    glm::vec3 observator(2.0f, 1.5f, 5.0f);
+    glm::vec3 eye(2.0f, 1.5f, 5.0f);
     glm::vec3 reference(0.0f, 0.0f, -10.0f);
     glm::vec3 up(0.0f, 1.0f, 0.0f);
-    glm::mat4 view = glm::lookAt(observator, reference, up);
+    glm::mat4 view = glm::lookAt(eye, reference, up);
     glm::mat4 projection = glm::perspective(glm::radians(75.0f), (GLfloat) ScreenWidth / (GLfloat) ScreenHeight, 0.1f, 100.0f);
 
     auto model = glm::identity<glm::mat4>();
@@ -157,9 +196,7 @@ void Render() {
     glUniformMatrix4fv(ViewLoc, 1, GL_FALSE, &view[0][0]);
     glUniformMatrix4fv(ProjectionLoc, 1, GL_FALSE, &projection[0][0]);
 
-    glBindVertexArray(VaoId);
-//    glDrawArrays(GL_TRIANGLES, 0, 3);
-    glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr);
+    Cube->Render();
 
     glFlush();
 }
@@ -169,12 +206,6 @@ void Cleanup() {
 
     glDisableVertexAttribArray(1);
     glDisableVertexAttribArray(0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glDeleteBuffers(1, &VboId);
-
-    glBindVertexArray(0);
-    glDeleteVertexArrays(1, &VaoId);
 }
 
 GLuint LoadShaders(const char *vertPath, const char *fragPath) {
