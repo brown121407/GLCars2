@@ -25,7 +25,7 @@ int ScreenWidth = 640, ScreenHeight = 480;
 GLuint ProgramId;
 GLint ModelLoc, ViewLoc, ProjectionLoc;
 GLint MaterialAmbientLoc, MaterialDiffuseLoc, MaterialSpecularLoc, MaterialShininessLoc, MaterialOpacityLoc;
-GLint LightPositionLoc, LightAmbientLoc, LightDiffuseLoc, LightSpecularLoc;
+GLint LightDirectionLoc, LightAmbientLoc, LightDiffuseLoc, LightSpecularLoc;
 
 void Initialize();
 void Render();
@@ -246,7 +246,7 @@ void Initialize() {
     MaterialSpecularLoc = glGetUniformLocation(ProgramId, "material.specular");
     MaterialOpacityLoc = glGetUniformLocation(ProgramId, "material.opacity");
 
-    LightPositionLoc = glGetUniformLocation(ProgramId, "light.position");
+    LightDirectionLoc = glGetUniformLocation(ProgramId, "light.direction");
     LightAmbientLoc = glGetUniformLocation(ProgramId, "light.ambient");
     LightDiffuseLoc = glGetUniformLocation(ProgramId, "light.diffuse");
     LightSpecularLoc = glGetUniformLocation(ProgramId, "light.specular");
@@ -274,8 +274,8 @@ void Render() {
     auto model = glm::mat4(1.0f);
     glUniformMatrix4fv(ModelLoc, 1, GL_FALSE, &model[0][0]);
 
-    glm::vec3 lightPosition(10.2f, 15.0f, -10.0f);
-    glUniform3fv(LightPositionLoc, 1, &lightPosition[0]);
+    glm::vec3 lightDirection(-0.5f, -1.0f, 0.5f);
+    glUniform3fv(LightDirectionLoc, 1, &lightDirection[0]);
 
     glm::vec3 lightAmbient(0.1f);
     glm::vec3 lightDiffuse(1.0f);
