@@ -20,16 +20,41 @@
 #include <vector>
 #include <map>
 
+GLFWwindow* Window;
+int ScreenWidth = 640, ScreenHeight = 480;
+GLuint ProgramId;
+GLint ModelLoc, ViewLoc, ProjectionLoc;
+GLint MaterialAmbientLoc, MaterialDiffuseLoc, MaterialSpecularLoc, MaterialShininessLoc, MaterialOpacityLoc;
+GLint LightPositionLoc, LightAmbientLoc, LightDiffuseLoc, LightSpecularLoc;
+
+void Initialize();
+void Render();
+void Cleanup();
+GLuint LoadShaders(const char* vertPath, const char* fragPath);
+void CheckCompileErrors(GLuint shader, const std::string& type);
+
+class Model;
+std::unique_ptr<Model> Car;
+
+
 struct Vertex {
     glm::vec3 Position;
     glm::vec3 Normal;
     glm::vec2 TexCoords;
 };
 
+struct Material {
+    glm::vec3 Ambient;
+    glm::vec3 Diffuse;
+    glm::vec3 Specular;
+    float Shininess;
+    float Opacity;
+};
+
 class Mesh {
 public:
-    Mesh(std::vector<Vertex> vertices, std::vector<GLuint> indices)
-    : _vertices(std::move(vertices)), _indices(std::move(indices)) {
+    Mesh(std::vector<Vertex> vertices, std::vector<GLuint> indices, Material material)
+    : _vertices(std::move(vertices)), _indices(std::move(indices)), _material(material) {
         glGenVertexArrays(1, &_vaoId);
         glBindVertexArray(_vaoId);
 
@@ -52,7 +77,7 @@ public:
 
     Mesh(Mesh&& other) noexcept
     : _vaoId(other._vaoId), _vboId(other._vboId), _eboId(other._eboId), _vertices(std::move(other._vertices)),
-    _indices(std::move(other._indices)) {
+    _indices(std::move(other._indices)), _material(other._material) {
 
     }
 
@@ -65,6 +90,11 @@ public:
     void Render() const {
         glBindVertexArray(_vaoId);
 
+        glUniform3fv(MaterialAmbientLoc, 1, &_material.Ambient[0]);
+        glUniform3fv(MaterialDiffuseLoc, 1, &_material.Diffuse[0]);
+        glUniform3fv(MaterialSpecularLoc, 1, &_material.Specular[0]);
+        glUniform1f(MaterialShininessLoc, _material.Shininess);
+        glUniform1f(MaterialOpacityLoc, _material.Opacity);
         glDrawElements(GL_TRIANGLES, _indices.size(), GL_UNSIGNED_INT, nullptr);
 
         glBindVertexArray(0);
@@ -72,6 +102,7 @@ public:
 private:
     std::vector<Vertex> _vertices;
     std::vector<GLuint> _indices;
+    Material _material;
     GLuint _vaoId, _vboId, _eboId;
 };
 
@@ -107,7 +138,7 @@ private:
     void processNode(aiNode* node, const aiScene* scene) {
         for (size_t i = 0; i < node->mNumMeshes; i++) {
             aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-            _meshes[node->mName.C_Str()] = processMesh(mesh, node);
+            _meshes[node->mName.C_Str()] = processMesh(mesh, scene);
         }
 
         for (size_t i = 0; i < node->mNumChildren; i++) {
@@ -115,7 +146,7 @@ private:
         }
     }
 
-    std::unique_ptr<Mesh> processMesh(aiMesh* mesh, aiNode* node) {
+    std::unique_ptr<Mesh> processMesh(aiMesh* mesh, const aiScene* scene) {
         std::vector<Vertex> vertices;
         for (int i = 0; i < mesh->mNumVertices; i++) {
             Vertex vertex{};
@@ -139,22 +170,26 @@ private:
             }
         }
 
-        return std::make_unique<Mesh>(vertices, indices);
+        aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+        aiColor4D ambient, diffuse, specular;
+        GLfloat opacity, shininess;
+        material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
+        material->Get(AI_MATKEY_COLOR_SPECULAR, specular);
+        material->Get(AI_MATKEY_COLOR_AMBIENT, ambient);
+        material->Get(AI_MATKEY_OPACITY, opacity);
+        material->Get(AI_MATKEY_SHININESS, shininess);
+
+        Material mat {
+            .Ambient = glm::vec3(ambient.r, ambient.g, ambient.b),
+            .Diffuse = glm::vec3(diffuse.r, diffuse.g, diffuse.b),
+            .Specular = glm::vec3(specular.r, specular.g, specular.b),
+            .Shininess = shininess,
+            .Opacity = opacity,
+        };
+
+        return std::make_unique<Mesh>(vertices, indices, mat);
     }
 };
-
-GLFWwindow* Window;
-int ScreenWidth = 640, ScreenHeight = 480;
-GLuint ProgramId;
-GLint ModelLoc, ViewLoc, ProjectionLoc, ColorCodeLoc;
-
-void Initialize();
-void Render();
-void Cleanup();
-GLuint LoadShaders(const char* vertPath, const char* fragPath);
-void CheckCompileErrors(GLuint shader, const std::string& type);
-
-std::unique_ptr<Model> Car;
 
 int main() {
     if (!glfwInit()) {
@@ -179,6 +214,8 @@ int main() {
     Initialize();
 
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     while (!glfwWindowShouldClose(Window)) {
         glfwGetFramebufferSize(Window, &ScreenWidth, &ScreenHeight);
@@ -204,11 +241,19 @@ void Initialize() {
     ModelLoc = glGetUniformLocation(ProgramId, "model");
     ViewLoc = glGetUniformLocation(ProgramId, "view");
     ProjectionLoc = glGetUniformLocation(ProgramId, "projection");
-    ColorCodeLoc = glGetUniformLocation(ProgramId, "colorCode");
+    MaterialAmbientLoc = glGetUniformLocation(ProgramId, "material.ambient");
+    MaterialDiffuseLoc = glGetUniformLocation(ProgramId, "material.diffuse");
+    MaterialSpecularLoc = glGetUniformLocation(ProgramId, "material.specular");
+    MaterialOpacityLoc = glGetUniformLocation(ProgramId, "material.opacity");
+
+    LightPositionLoc = glGetUniformLocation(ProgramId, "light.position");
+    LightAmbientLoc = glGetUniformLocation(ProgramId, "light.ambient");
+    LightDiffuseLoc = glGetUniformLocation(ProgramId, "light.diffuse");
+    LightSpecularLoc = glGetUniformLocation(ProgramId, "light.specular");
 }
 
 void Render() {
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClearColor(0.25f, 0.25f, 0.25f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glUseProgram(ProgramId);
@@ -218,22 +263,28 @@ void Render() {
     float radius = 10.0f;
     float camX = glm::sin(glfwGetTime() / 2) * radius;
     float camZ = glm::cos(glfwGetTime() / 2) * radius;
-    glm::mat4 view = glm::lookAt(glm::vec3(camX, 5.0f, camZ), reference, up);
+    glm::vec3 cameraPos = glm::vec3(camX, 5.0f, camZ);
+    glm::mat4 view = glm::lookAt(cameraPos, reference, up);
 
     glm::mat4 projection = glm::perspective(glm::radians(75.0f), (GLfloat) ScreenWidth / (GLfloat) ScreenHeight, 0.1f, 100.0f);
 
     glUniformMatrix4fv(ViewLoc, 1, GL_FALSE, &view[0][0]);
     glUniformMatrix4fv(ProjectionLoc, 1, GL_FALSE, &projection[0][0]);
 
-    glUniform1i(ColorCodeLoc, 1);
     auto model = glm::mat4(1.0f);
     glUniformMatrix4fv(ModelLoc, 1, GL_FALSE, &model[0][0]);
-    Car->Render([](const std::string& name) { return name == "Road"; });
 
-    glUniform1i(ColorCodeLoc, 2);
-    model = glm::mat4(1.0f);
-    glUniformMatrix4fv(ModelLoc, 1, GL_FALSE, &model[0][0]);
-    Car->Render([](const std::string& name) { return name != "Road"; });
+    glm::vec3 lightPosition(10.2f, 15.0f, -10.0f);
+    glUniform3fv(LightPositionLoc, 1, &lightPosition[0]);
+
+    glm::vec3 lightAmbient(0.1f);
+    glm::vec3 lightDiffuse(1.0f);
+    glm::vec3 lightSpecular(1.0f);
+    glUniform3fv(LightAmbientLoc, 1, &lightAmbient[0]);
+    glUniform3fv(LightDiffuseLoc, 1, &lightDiffuse[0]);
+    glUniform3fv(LightSpecularLoc, 1, &lightSpecular[0]);
+
+    Car->Render();
 
     glFlush();
 }
