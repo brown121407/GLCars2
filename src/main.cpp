@@ -20,23 +20,34 @@
 #include <vector>
 #include <map>
 
+struct Vertex {
+    glm::vec3 Position;
+    glm::vec3 Normal;
+    glm::vec2 TexCoords;
+};
+
 class Mesh {
 public:
-    Mesh(std::vector<GLfloat> vertices, std::vector<GLuint> indices)
+    Mesh(std::vector<Vertex> vertices, std::vector<GLuint> indices)
     : _vertices(std::move(vertices)), _indices(std::move(indices)) {
         glGenVertexArrays(1, &_vaoId);
         glBindVertexArray(_vaoId);
 
         glGenBuffers(1, &_vboId);
         glBindBuffer(GL_ARRAY_BUFFER, _vboId);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * _vertices.size(), &_vertices[0], GL_STATIC_DRAW);
-
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * _vertices.size(), &_vertices[0], GL_STATIC_DRAW);
 
         glGenBuffers(1, &_eboId);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _eboId);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * _indices.size(), &_indices[0], GL_STATIC_DRAW);
+
+        // Vertex positions
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) 0);
+
+        // Normals
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) offsetof(Vertex, Normal));
     }
 
     Mesh(Mesh&& other) noexcept
@@ -59,7 +70,7 @@ public:
         glBindVertexArray(0);
     }
 private:
-    std::vector<GLfloat> _vertices;
+    std::vector<Vertex> _vertices;
     std::vector<GLuint> _indices;
     GLuint _vaoId, _vboId, _eboId;
 };
@@ -68,7 +79,7 @@ class Model {
 public:
     explicit Model(const char* path) {
         Assimp::Importer importer;
-        const aiScene *scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
+        const aiScene *scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals);
         if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
             std::cerr << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
             exit(1);
@@ -105,12 +116,19 @@ private:
     }
 
     std::unique_ptr<Mesh> processMesh(aiMesh* mesh, aiNode* node) {
-        std::cout << mesh->mName.C_Str() << " in " << node->mName.C_Str() << std::endl;
-        std::vector<GLfloat> vertices;
+        std::vector<Vertex> vertices;
         for (int i = 0; i < mesh->mNumVertices; i++) {
-            vertices.push_back(mesh->mVertices[i].x);
-            vertices.push_back(mesh->mVertices[i].y);
-            vertices.push_back(mesh->mVertices[i].z);
+            Vertex vertex{};
+            vertex.Position.x = mesh->mVertices[i].x;
+            vertex.Position.y = mesh->mVertices[i].y;
+            vertex.Position.z = mesh->mVertices[i].z;
+
+            if (mesh->HasNormals()) {
+                vertex.Normal.x = mesh->mNormals[i].x;
+                vertex.Normal.y = mesh->mNormals[i].y;
+                vertex.Normal.z = mesh->mNormals[i].z;
+            }
+            vertices.push_back(vertex);
         }
 
         std::vector<GLuint> indices;
