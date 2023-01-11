@@ -24,7 +24,7 @@ GLFWwindow* Window;
 int ScreenWidth = 640, ScreenHeight = 480;
 GLuint ProgramId;
 GLint ModelLoc, ViewLoc, ProjectionLoc;
-GLint MaterialAmbientLoc, MaterialDiffuseLoc, MaterialSpecularLoc, MaterialShininessLoc, MaterialOpacityLoc;
+GLint MaterialAmbientLoc, MaterialDiffuseLoc, MaterialSpecularLoc, MaterialEmissionLoc, MaterialShininessLoc, MaterialOpacityLoc;
 GLint LightDirectionLoc, LightAmbientLoc, LightDiffuseLoc, LightSpecularLoc;
 
 void Initialize();
@@ -47,6 +47,7 @@ struct Material {
     glm::vec3 Ambient;
     glm::vec3 Diffuse;
     glm::vec3 Specular;
+    glm::vec3 Emission;
     float Shininess;
     float Opacity;
 };
@@ -93,6 +94,7 @@ public:
         glUniform3fv(MaterialAmbientLoc, 1, &_material.Ambient[0]);
         glUniform3fv(MaterialDiffuseLoc, 1, &_material.Diffuse[0]);
         glUniform3fv(MaterialSpecularLoc, 1, &_material.Specular[0]);
+        glUniform3fv(MaterialEmissionLoc, 1, &_material.Emission[0]);
         glUniform1f(MaterialShininessLoc, _material.Shininess);
         glUniform1f(MaterialOpacityLoc, _material.Opacity);
         glDrawElements(GL_TRIANGLES, _indices.size(), GL_UNSIGNED_INT, nullptr);
@@ -171,18 +173,20 @@ private:
         }
 
         aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-        aiColor4D ambient, diffuse, specular;
+        aiColor4D ambient, diffuse, specular, emission;
         GLfloat opacity, shininess;
         material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse);
         material->Get(AI_MATKEY_COLOR_SPECULAR, specular);
         material->Get(AI_MATKEY_COLOR_AMBIENT, ambient);
         material->Get(AI_MATKEY_OPACITY, opacity);
         material->Get(AI_MATKEY_SHININESS, shininess);
+        material->Get(AI_MATKEY_COLOR_EMISSIVE, emission);
 
         Material mat {
             .Ambient = glm::vec3(ambient.r, ambient.g, ambient.b),
             .Diffuse = glm::vec3(diffuse.r, diffuse.g, diffuse.b),
             .Specular = glm::vec3(specular.r, specular.g, specular.b),
+            .Emission = glm::vec3(emission.r, emission.g, emission.b),
             .Shininess = shininess,
             .Opacity = opacity,
         };
@@ -244,6 +248,7 @@ void Initialize() {
     MaterialAmbientLoc = glGetUniformLocation(ProgramId, "material.ambient");
     MaterialDiffuseLoc = glGetUniformLocation(ProgramId, "material.diffuse");
     MaterialSpecularLoc = glGetUniformLocation(ProgramId, "material.specular");
+    MaterialEmissionLoc = glGetUniformLocation(ProgramId, "material.emission");
     MaterialOpacityLoc = glGetUniformLocation(ProgramId, "material.opacity");
 
     LightDirectionLoc = glGetUniformLocation(ProgramId, "light.direction");
