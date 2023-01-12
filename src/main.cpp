@@ -36,7 +36,6 @@ void CheckCompileErrors(GLuint shader, const std::string& type);
 class Model;
 std::unique_ptr<Model> Car;
 
-
 struct Vertex {
     glm::vec3 Position;
     glm::vec3 Normal;
@@ -258,7 +257,7 @@ void Initialize() {
 }
 
 void Render() {
-    glClearColor(0.25f, 0.25f, 0.25f, 1.0f);
+    glClearColor(0.5f, 0.6f, 0.7f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glUseProgram(ProgramId);

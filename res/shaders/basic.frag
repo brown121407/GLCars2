@@ -38,5 +38,12 @@ void main() {
     vec3 specular = light.specular * (spec * material.specular);
 
     vec3 result = material.emission + ambient + diffuse;
-    FragColor = vec4(result, material.opacity);
+
+    vec3 fogColor = vec3(0.5, 0.6, 0.7);
+    float distToFrag = distance(vec3(0.0), FragPos);
+    float fullFogThreshold = 50.0;
+    float fogFactor = clamp((fullFogThreshold - distToFrag) / distToFrag, 0, 1);
+    vec3 finalColor = fogFactor * result + (1 - fogFactor) * fogColor;
+
+    FragColor = vec4(finalColor, material.opacity);
 }
